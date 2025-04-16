@@ -1,2 +1,3 @@
 gtfs
 gtfs_realtime.pb
+.venv/

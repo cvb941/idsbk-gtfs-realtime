@@ -101,21 +101,30 @@ def create_gtfs_realtime_feed(data, gtfs_data):
             trip_update.trip.direction_id = 1 if vehicle["timeTableTrip"]["ezTripDirection"] == "there" else 0
             trip_update.trip.start_date = time.strftime("%Y%m%d")
 
+            # Add delay information
+            delay_seconds = vehicle["delayMinutes"] * 60  # Convert minutes to seconds
+            trip_update.delay = delay_seconds
+
             # Augment with stop times from static GTFS data
             for stop_time in gtfs_data['stop_times']:
                 if stop_time['trip_id'] == trip_id:
                     stop_time_update = trip_update.stop_time_update.add()
                     stop_time_update.stop_sequence = int(stop_time['stop_sequence'])
                     stop_time_update.stop_id = stop_time['stop_id']
+                    
+                    # Calculate arrival and departure times with delay
                     if 'arrival_time' in stop_time:
                         arrival = stop_time_update.arrival
                         hours, minutes, seconds = map(int, stop_time['arrival_time'].split(':'))
-                        arrival.time = hours * 3600 + minutes * 60 + seconds
+                        arrival.time = hours * 3600 + minutes * 60 + seconds + delay_seconds
+                    
                     if 'departure_time' in stop_time:
                         departure = stop_time_update.departure
                         hours, minutes, seconds = map(int, stop_time['departure_time'].split(':'))
-                        departure.time = hours * 3600 + minutes * 60 + seconds
-                    stop_time_update.departure.delay = vehicle["delayMinutes"] * 60
+                        departure.time = hours * 3600 + minutes * 60 + seconds + delay_seconds
+                    
+                    # Set delay for this stop
+                    stop_time_update.departure.delay = delay_seconds
 
     return feed.SerializeToString()
 
@@ -126,6 +135,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-type", "application/octet-stream")
             self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
             self.end_headers()
             data = fetch_data(DATA_URL)
             gtfs_feed = create_gtfs_realtime_feed(data, gtfs_data)
@@ -133,6 +143,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
             self.end_headers()
             self.wfile.write(b"Not Found")
 
@@ -141,10 +152,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-type", "application/octet-stream")
             self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
             self.end_headers()
         else:
             self.send_response(404)
             self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
             self.end_headers()
 
     def do_OPTIONS(self):
@@ -152,6 +165,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
         self.end_headers()
 
 
